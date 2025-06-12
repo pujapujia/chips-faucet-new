@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CHIPS Faucet Chips</title>
+  <style>
+    body {
+      background-color: #000000;
+      font-family: 'Courier New', Courier, monospace;
+      color: #ffffff;
+      margin: 0;
+      padding: 20px;
+      text-align: center;
+      font-size: 16px;
+    }
+    .container {
+      width: 320px;
+      margin: 0 auto;
+      background-color: #000000;
+      border: 8px solid #000000;
+      padding: 20px;
+      box-shadow: 0 0 10px #000000;
+    }
+    h1 {
+      font-size: 24px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      margin-bottom: 20px;
+      text-shadow: 2px 2px #000000;
+    }
+    input {
+      width: 100%;
+      background-color: #ffffff;
+      color: #000000;
+      border: 4px solid #000000;
+      padding: 8px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 14px;
+      margin-bottom: 10px;
+      box-sizing: border-box;
+    }
+    button {
+      width: 100%;
+      background-color: #00ff00;
+      color: #000000;
+      border: 4px solid #000000;
+      padding: 10px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 16px;
+      text-transform: uppercase;
+      cursor: pointer;
+      margin-bottom: 10px;
+    }
+    button:hover {
+      background-color: #00cc00;
+    }
+    #result {
+      background-color: #000000;
+      border: 4px solid #000000;
+      padding: 10px;
+      font-size: 14px;
+      text-align: left;
+      min-height: 50px;
+      word-wrap: break-word;
+      color: #ffffff;
+      margin-bottom: 20px;
+    }
+    .footer {
+      margin-top: 20px;
+      font-size: 14px;
+      color: #ffffff;
+    }
+    .donate-address {
+      display: inline-block;
+      background-color: #000000;
+      padding: 5px;
+      border: 2px solid #000000;
+      margin-right: 5px;
+      max-width: 200px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .copy-button {
+      background-color: #00ff00;
+      color: #000000;
+      border: 2px solid #000000;
+      padding: 5px 10px;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 12px;
+      cursor: pointer;
+      text-transform: uppercase;
+    }
+    .copy-button:hover {
+      background-color: #00cc00;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>CHIPS Faucet</h1>
+    <input id="wallet" type="text" placeholder="WALLET (0x...)">
+    <button onclick="claimFaucet()">CLAIM FAUCET</button>
+    <div id="result"></div>
+    <div class="footer">
+      <span class="donate-address">DONATE: 0x00d1cBA86120485486deBef7FAE54132612b41B0</span>
+      <button class="copy-button" onclick="copyAddress()">COPY</button>
+    </div>
+  </div>
+  <script>
+    async function claimFaucet() {
+      const wallet = document.getElementById("wallet").value;
+      const resultDiv = document.getElementById("result");
+
+      try {
+        const response = await fetch("/api/claim", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ wallet }),
+        });
+        const data = await response.json();
+        if (response.ok) {
+          resultDiv.innerHTML = `SUCCESS: Tx Hash ${data.txHash}`;
+        } else {
+          resultDiv.innerHTML = `ERROR: ${data.error}`;
+        }
+      } catch (error) {
+        resultDiv.innerHTML = `ERROR: Claim failed - ${error.message}`;
+      }
+    }
+
+    function copyAddress() {
+      const address = "0x00d1cBA86120485486deBef7FAE54132612b41B0";
+      navigator.clipboard.writeText(address).then(() => {
+        alert("ADDRESS COPIED!");
+      }).catch(() => {
+        alert("COPY FAILED!");
+      });
+    }
+  </script>
+</body>
+</html>
