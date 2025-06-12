@@ -1,8 +1,6 @@
 require("dotenv").config();
 const { ethers } = require("ethers");
-const fs = require("fs").promises;
-const path = require("path");
-const { execSync } = require("child_process");
+const fetch = require("node-fetch");
 
 module.exports = async (req, res) => {
   console.log("API /claim dipanggil dengan:", req.body);
@@ -13,58 +11,55 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: "Konfigurasi server salah" });
   }
 
-  // Path untuk claims.json (cuma di root, nggak pake /tmp)
-  const claimsFile = path.join(process.cwd(), "claims.json");
+  const GITHUB_API_URL = `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/contents/claims.json`;
+  const GITHUB_TOKEN = process.env.CLAIM_TOKEN;
 
-  // Fungsi untuk baca claims
+  // Fungsi untuk baca claims dari GitHub
   async function readClaims() {
     try {
-      const data = await fs.readFile(claimsFile, "utf8");
-      console.log("Baca claims.json:", data);
-      return JSON.parse(data);
-    } catch (error) {
-      if (error.code === "ENOENT") {
-        console.log("claims.json nggak ada, inisialisasi kosong");
-        const emptyClaims = {};
-        await fs.writeFile(claimsFile, JSON.stringify(emptyClaims, null, 2));
-        return emptyClaims;
+      const response = await fetch(GITHUB_API_URL, {
+        headers: {
+          Authorization: `token ${GITHUB_TOKEN}`,
+          Accept: "application/vnd.github.v3+json",
+        },
+      });
+      if (response.status === 404) {
+        console.log("claims.json nggak ada di GitHub, inisialisasi kosong");
+        return {};
       }
-      console.error("Gagal baca claims.json:", error.message);
+      if (!response.ok) {
+        throw new Error(`Gagal baca claims.json dari GitHub: ${response.statusText}`);
+      }
+      const data = await response.json();
+      const content = Buffer.from(data.content, "base64").toString("utf8");
+      console.log("Baca claims.json dari GitHub:", content);
+      return JSON.parse(content);
+    } catch (error) {
+      console.error("Gagal baca claims:", error.message);
       throw error;
     }
   }
 
-  // Fungsi untuk tulis claims dan push ke GitHub
-  async function writeClaims(claims) {
+  // Fungsi untuk tulis claims ke GitHub
+  async function writeClaims(claims, sha) {
     try {
-      // Backup claims sebelum ditulis
-      let backupClaims;
-      try {
-        backupClaims = await fs.readFile(claimsFile, "utf8");
-      } catch (error) {
-        backupClaims = "{}"; // Kalau file nggak ada
+      const content = Buffer.from(JSON.stringify(claims, null, 2)).toString("base64");
+      const response = await fetch(GITHUB_API_URL, {
+        method: "PUT",
+        headers: {
+          Authorization: `token ${GITHUB_TOKEN}`,
+          Accept: "application/vnd.github.v3+json",
+        },
+        body: JSON.stringify({
+          message: `Update claims.json untuk wallet ${req.body.wallet}`,
+          content,
+          sha,
+        }),
+      });
+      if (!response.ok) {
+        throw new Error(`Gagal tulis claims.json ke GitHub: ${response.statusText}`);
       }
-
-      // Tulis claims baru
-      const data = JSON.stringify(claims, null, 2);
-      await fs.writeFile(claimsFile, data);
-      console.log("Tulis claims.json:", data);
-
-      // Coba push ke GitHub
-      try {
-        execSync("git config --global user.email 'bot@github.com'");
-        execSync("git config --global user.name 'Claims Bot'");
-        execSync("git add claims.json");
-        execSync(`git commit -m "Update claims.json untuk wallet ${req.body.wallet}" || true`);
-        execSync(`git push https://x-access-token:${process.env.CLAIM_TOKEN}@github.com/${process.env.GITHUB_REPOSITORY}.git`);
-        console.log("Berhasil push claims.json ke GitHub");
-      } catch (gitError) {
-        console.error("Gagal push claims.json ke GitHub:", gitError.message);
-        // Rollback ke backup kalau gagal push
-        await fs.writeFile(claimsFile, backupClaims);
-        console.log("Rollback claims.json ke data sebelumnya");
-        throw new Error("Gagal menyimpan klaim ke GitHub");
-      }
+      console.log("Berhasil tulis claims.json ke GitHub");
     } catch (error) {
       console.error("Gagal tulis claims:", error.message);
       throw error;
@@ -98,7 +93,19 @@ module.exports = async (req, res) => {
 
     // Cek batas klaim 24 jam
     console.log("Cek klaim untuk:", normalizedWallet);
-    const claims = await readClaims();
+    const claimsResponse = await fetch(GITHUB_API_URL, {
+      headers: {
+        Authorization: `token ${GITHUB_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+      },
+    });
+    let claims = {};
+    let sha;
+    if (claimsResponse.ok) {
+      const data = await claimsResponse.json();
+      sha = data.sha;
+      claims = JSON.parse(Buffer.from(data.content, "base64").toString("utf8"));
+    }
     const lastClaim = claims[normalizedWallet];
     const now = Date.now();
     const oneDayInMs = 24 * 60 * 60 * 1000;
@@ -125,7 +132,7 @@ module.exports = async (req, res) => {
 
     // Simpan timestamp klaim hanya kalau transaksi sukses
     claims[normalizedWallet] = now;
-    await writeClaims(claims);
+    await writeClaims(claims, sha);
     console.log("Klaim disimpan untuk:", normalizedWallet);
 
     res.json({
