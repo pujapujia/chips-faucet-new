@@ -107,29 +107,15 @@
       <button class="copy-button" onclick="copyAddress()">COPY</button>
     </div>
   </div>
-  <script src="https://unpkg.com/ethers@5.7.2/dist/ethers.min.js" integrity="sha384-HMWwN4O7ZAzcti2D2aW3lX8zK0cEmyqDkbU7f2Sdp+5T2e+3i8b3k+6Z3fZ4b3fH" crossorigin="anonymous"></script>
   <script>
     async function claimFaucet() {
-      const walletInput = document.getElementById("wallet").value.trim();
+      const wallet = document.getElementById("wallet").value.trim();
       const resultDiv = document.getElementById("result");
 
-      // Validasi dasar
-      if (!walletInput) {
-        resultDiv.innerHTML = "ERROR: Alamat wallet wajib diisi";
+      // Basic validation
+      if (!wallet) {
+        resultDiv.innerHTML = "ERROR: Wallet address is required";
         return;
-      }
-
-      // Coba normalisasi wallet
-      let wallet = walletInput;
-      if (typeof ethers !== "undefined" && ethers.utils) {
-        try {
-          wallet = ethers.utils.getAddress(walletInput);
-        } catch (error) {
-          resultDiv.innerHTML = "ERROR: Alamat wallet nggak valid";
-          return;
-        }
-      } else {
-        console.warn("ethers.js gagal dimuat, validasi wallet di backend");
       }
 
       try {
@@ -145,7 +131,7 @@
           resultDiv.innerHTML = `ERROR: ${data.error}`;
         }
       } catch (error) {
-        resultDiv.innerHTML = `ERROR: Klaim gagal - ${error.message}`;
+        resultDiv.innerHTML = `ERROR: Claim failed - ${error.message}`;
       }
     }
 
