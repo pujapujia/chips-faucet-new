@@ -1,1 +1,15 @@
-
+{
+  "name": "chips-faucet-claimer",
+  "version": "1.0.0",
+  "description": "Faucet claimer for CHIPS testnet tokens",
+  "main": "api/claim.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1
+  },
+  "dependencies": {
+    "ethers": "6.13.2",
+    "dotenv": "16.4.5"
+  },
+  "author": "pujapujia",
+  "license": "MIT"
+}
