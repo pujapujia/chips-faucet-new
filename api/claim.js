@@ -13,20 +13,31 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: "Missing PRIVATE_KEY" });
   }
 
-  // Path untuk claims.json di /tmp
-  const claimsFile = path.join("/tmp", "claims.json");
+  // Path untuk claims.json
+  const tmpClaimsFile = path.join("/tmp", "claims.json");
+  const rootClaimsFile = path.join(process.cwd(), "claims.json");
 
   // Fungsi untuk baca claims
   async function readClaims() {
     try {
-      const data = await fs.readFile(claimsFile, "utf8");
-      console.log("Read claims.json:", data);
+      // Coba baca dari /tmp
+      const data = await fs.readFile(tmpClaimsFile, "utf8");
+      console.log("Read /tmp/claims.json:", data);
       return JSON.parse(data);
     } catch (error) {
       if (error.code === "ENOENT") {
-        console.log("claims.json not found, initializing empty claims");
-        await fs.writeFile(claimsFile, "{}");
-        return {};
+        console.log("/tmp/claims.json not found, trying root claims.json");
+        try {
+          // Coba baca dari root
+          const rootData = await fs.readFile(rootClaimsFile, "utf8");
+          console.log("Read root claims.json:", rootData);
+          await fs.writeFile(tmpClaimsFile, rootData);
+          return JSON.parse(rootData);
+        } catch (rootError) {
+          console.log("No root claims.json, initializing empty claims");
+          await fs.writeFile(tmpClaimsFile, "{}");
+          return {};
+        }
       }
       console.error("Error reading claims:", error.message);
       throw error;
@@ -37,22 +48,22 @@ module.exports = async (req, res) => {
   async function writeClaims(claims) {
     try {
       const data = JSON.stringify(claims, null, 2);
-      await fs.writeFile(claimsFile, data);
-      console.log("Wrote claims.json:", data);
+      await fs.writeFile(tmpClaimsFile, data);
+      console.log("Wrote /tmp/claims.json:", data);
       if (process.env.CLAIM_TOKEN) {
         try {
           // Setup git
           execSync("git config --global user.email 'bot@github.com'");
           execSync("git config --global user.name 'Claims Bot'");
-          // Copy claims.json ke root untuk commit
-          await fs.copyFile(claimsFile, path.join(process.cwd(), "claims.json"));
+          // Copy ke root untuk commit
+          await fs.copyFile(tmpClaimsFile, rootClaimsFile);
           // Commit dan push
           execSync("git add claims.json");
           execSync(`git commit -m "Update claims.json for wallet ${req.body.wallet}"`);
           execSync(`git push https://x-access-token:${process.env.CLAIM_TOKEN}@github.com/${process.env.GITHUB_REPOSITORY}.git`);
           console.log("Pushed claims.json to GitHub");
-        } catch (error) {
-          console.error("Failed to push claims.json:", error.message);
+        } catch (gitError) {
+          console.error("Failed to push claims.json:", gitError.message);
         }
       }
     } catch (error) {
