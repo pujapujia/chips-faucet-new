@@ -8,7 +8,7 @@ module.exports = async (req, res) => {
   // Cek environment variables
   if (!process.env.PRIVATE_KEY || !process.env.CLAIM_TOKEN || !process.env.GITHUB_REPOSITORY) {
     console.error("Environment variables hilang: PRIVATE_KEY, CLAIM_TOKEN, atau GITHUB_REPOSITORY");
-    return res.status(500).json({ error: "Konfigurasi server salah" });
+    return res.status(500).json({ error: "Konfigurasi server salah, hubungi admin" });
   }
 
   const GITHUB_API_URL = `https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}/contents/claims.json`;
@@ -18,22 +18,24 @@ module.exports = async (req, res) => {
   async function readClaims() {
     try {
       const response = await fetch(GITHUB_API_URL, {
+        method: "GET",
         headers: {
-          Authorization: `token ${GITHUB_TOKEN}`,
+          Authorization: `Bearer ${GITHUB_TOKEN}`,
           Accept: "application/vnd.github.v3+json",
+          "User-Agent": "chips-faucet-claimer",
         },
       });
       if (response.status === 404) {
         console.log("claims.json nggak ada di GitHub, inisialisasi kosong");
-        return {};
+        return { content: {}, sha: null };
       }
       if (!response.ok) {
-        throw new Error(`Gagal baca claims.json dari GitHub: ${response.statusText}`);
+        throw new Error(`Gagal baca claims.json dari GitHub: ${response.status} ${response.statusText}`);
       }
       const data = await response.json();
-      const content = Buffer.from(data.content, "base64").toString("utf8");
+      const content = JSON.parse(Buffer.from(data.content, "base64").toString("utf8"));
       console.log("Baca claims.json dari GitHub:", content);
-      return JSON.parse(content);
+      return { content, sha: data.sha };
     } catch (error) {
       console.error("Gagal baca claims:", error.message);
       throw error;
@@ -44,20 +46,22 @@ module.exports = async (req, res) => {
   async function writeClaims(claims, sha) {
     try {
       const content = Buffer.from(JSON.stringify(claims, null, 2)).toString("base64");
+      const body = {
+        message: `Update claims.json untuk wallet ${req.body.wallet}`,
+        content,
+      };
+      if (sha) body.sha = sha; // Sertakan sha kalau file sudah ada
       const response = await fetch(GITHUB_API_URL, {
         method: "PUT",
         headers: {
-          Authorization: `token ${GITHUB_TOKEN}`,
+          Authorization: `Bearer ${GITHUB_TOKEN}`,
           Accept: "application/vnd.github.v3+json",
+          "User-Agent": "chips-faucet-claimer",
         },
-        body: JSON.stringify({
-          message: `Update claims.json untuk wallet ${req.body.wallet}`,
-          content,
-          sha,
-        }),
+        body: JSON.stringify(body),
       });
       if (!response.ok) {
-        throw new Error(`Gagal tulis claims.json ke GitHub: ${response.statusText}`);
+        throw new Error(`Gagal tulis claims.json ke GitHub: ${response.status} ${response.statusText}`);
       }
       console.log("Berhasil tulis claims.json ke GitHub");
     } catch (error) {
@@ -93,19 +97,7 @@ module.exports = async (req, res) => {
 
     // Cek batas klaim 24 jam
     console.log("Cek klaim untuk:", normalizedWallet);
-    const claimsResponse = await fetch(GITHUB_API_URL, {
-      headers: {
-        Authorization: `token ${GITHUB_TOKEN}`,
-        Accept: "application/vnd.github.v3+json",
-      },
-    });
-    let claims = {};
-    let sha;
-    if (claimsResponse.ok) {
-      const data = await claimsResponse.json();
-      sha = data.sha;
-      claims = JSON.parse(Buffer.from(data.content, "base64").toString("utf8"));
-    }
+    const { content: claims, sha } = await readClaims();
     const lastClaim = claims[normalizedWallet];
     const now = Date.now();
     const oneDayInMs = 24 * 60 * 60 * 1000;
