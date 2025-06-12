@@ -20,11 +20,15 @@ module.exports = async (req, res) => {
   async function readClaims() {
     try {
       const data = await fs.readFile(claimsFile, "utf8");
+      console.log("Read claims.json:", data);
       return JSON.parse(data);
     } catch (error) {
       if (error.code === "ENOENT") {
+        console.log("claims.json not found, initializing empty claims");
+        await fs.writeFile(claimsFile, "{}");
         return {};
       }
+      console.error("Error reading claims:", error.message);
       throw error;
     }
   }
@@ -32,7 +36,9 @@ module.exports = async (req, res) => {
   // Fungsi untuk tulis claims dan push ke GitHub
   async function writeClaims(claims) {
     try {
-      await fs.writeFile(claimsFile, JSON.stringify(claims, null, 2));
+      const data = JSON.stringify(claims, null, 2);
+      await fs.writeFile(claimsFile, data);
+      console.log("Wrote claims.json:", data);
       if (process.env.CLAIM_TOKEN) {
         try {
           // Setup git
