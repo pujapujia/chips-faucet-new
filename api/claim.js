@@ -5,12 +5,12 @@ const path = require("path");
 const { execSync } = require("child_process");
 
 module.exports = async (req, res) => {
-  console.log("API /claim called with body:", req.body);
+  console.log("API /claim called with:", req.body);
 
   // Cek environment variables
   if (!process.env.PRIVATE_KEY) {
     console.error("Missing PRIVATE_KEY");
-    return res.status(500).json({ error: "ERROR: Missing PRIVATE_KEY" });
+    return res.status(500).json({ error: "Missing PRIVATE_KEY" });
   }
 
   // Path untuk claims.json
@@ -32,7 +32,7 @@ module.exports = async (req, res) => {
   // Fungsi untuk tulis claims dan push ke GitHub
   async function writeClaims(claims) {
     await fs.writeFile(claimsFile, JSON.stringify(claims, null, 2));
-    if (process.env.GITHUB_TOKEN) {
+    if (process.env.CLAIM_TOKEN) {
       try {
         // Setup git
         execSync("git config --global user.email 'bot@github.com'");
@@ -40,7 +40,7 @@ module.exports = async (req, res) => {
         // Commit dan push
         execSync("git add claims.json");
         execSync(`git commit -m "Update claims.json for wallet ${req.body.wallet}"`);
-        execSync(`git push https://x-access-token:${process.env.GITHUB_TOKEN}@github.com/${process.env.GITHUB_REPOSITORY}.git`);
+        execSync(`git push https://x-access-token:${process.env.CLAIM_TOKEN}@github.com/${process.env.GITHUB_REPOSITORY}.git`);
         console.log("Pushed claims.json to GitHub");
       } catch (error) {
         console.error("Failed to push claims.json:", error.message);
@@ -50,7 +50,7 @@ module.exports = async (req, res) => {
 
   try {
     // Cek koneksi RPC
-    const provider = new ethers.JsonRpcProvider("http://20.211.3.101:8545");
+    const provider = new ethers.JsonRpcProvider("http://20.63.3.101:8545");
     await provider.getBlockNumber().catch((err) => {
       throw new Error(`RPC connection failed: ${err.message}`);
     });
@@ -61,17 +61,17 @@ module.exports = async (req, res) => {
     // Validasi input
     if (!targetWallet) {
       console.error("Missing wallet");
-      return res.status(400).json({ error: "ERROR: Missing wallet" });
+      return res.status(400).json({ error: "Missing wallet address" });
     }
 
     // Validasi alamat wallet
     if (!ethers.isAddress(targetWallet)) {
       console.error("Invalid wallet address:", targetWallet);
-      return res.status(400).json({ error: "ERROR: Invalid wallet address" });
+      return res.status(400).json({ error: "Invalid wallet address" });
     }
 
     // Cek batas klaim 24 jam
-    console.log("Checking claim for wallet:", targetWallet);
+    console.log("Checking claim for:", targetWallet);
     const claims = await readClaims();
     const lastClaim = claims[targetWallet];
     const now = Date.now();
@@ -81,9 +81,9 @@ module.exports = async (req, res) => {
       const timeLeftMs = oneDayInMs - (now - lastClaim);
       const hoursLeft = Math.floor(timeLeftMs / (60 * 60 * 1000));
       const minutesLeft = Math.floor((timeLeftMs % (60 * 60 * 1000)) / (60 * 1000));
-      console.log(`Wallet ${targetWallet} already claimed, time left: ${hoursLeft}h ${minutesLeft}m`);
+      console.log(`Wallet ${targetWallet} claimed, time left: ${hoursLeft}h ${minutesLeft}m`);
       return res.status(429).json({
-        error: `ERROR: Wallet already claimed. Try again in ${hoursLeft} hours ${minutesLeft} minutes`,
+        error: `Wallet already claimed. Try again in ${hoursLeft} hours ${minutesLeft} minutes`,
       });
     }
 
@@ -95,18 +95,18 @@ module.exports = async (req, res) => {
     });
     console.log("Transaction sent, hash:", tx.hash);
     const receipt = await tx.wait();
-    console.log("Transaction confirmed, receipt:", receipt.hash);
+    console.log("Transaction confirmed:", receipt.hash);
 
     // Simpan timestamp klaim
     claims[targetWallet] = now;
     await writeClaims(claims);
-    console.log("Claim saved for wallet:", targetWallet);
+    console.log("Claim saved for:", targetWallet);
 
     res.json({
       txHash: receipt.hash,
     });
   } catch (error) {
     console.error("Error claiming faucet:", error.message);
-    res.status(500).json({ error: `ERROR: Claim failed - ${error.message}` });
+    res.status(500).json({ error: `Claim failed - ${error.message}` });
   }
 };
