@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>CHIPS Faucet Chips</title>
+  <title>CHIPS Faucet</title>
   <style>
     body {
       background-color: #000000;
@@ -107,10 +107,20 @@
       <button class="copy-button" onclick="copyAddress()">COPY</button>
     </div>
   </div>
+  <script src="https://cdn.ethers.io/lib/ethers-5.7.2.min.js"></script>
   <script>
     async function claimFaucet() {
-      const wallet = document.getElementById("wallet").value;
+      const walletInput = document.getElementById("wallet").value.trim();
       const resultDiv = document.getElementById("result");
+
+      // Validasi dan normalisasi wallet
+      let wallet;
+      try {
+        wallet = ethers.utils.getAddress(walletInput);
+      } catch (error) {
+        resultDiv.innerHTML = "ERROR: Alamat wallet nggak valid";
+        return;
+      }
 
       try {
         const response = await fetch("/api/claim", {
@@ -125,12 +135,12 @@
           resultDiv.innerHTML = `ERROR: ${data.error}`;
         }
       } catch (error) {
-        resultDiv.innerHTML = `ERROR: Claim failed - ${error.message}`;
+        resultDiv.innerHTML = `ERROR: Klaim gagal - ${error.message}`;
       }
     }
 
     function copyAddress() {
-      const address = "0x00d1cBA86120485486deBef7FAE54132612b41B0";
+      const address = "0x3feBdD2e594107D010FB551569cCEed8E7041Df4";
       navigator.clipboard.writeText(address).then(() => {
         alert("ADDRESS COPIED!");
       }).catch(() => {
