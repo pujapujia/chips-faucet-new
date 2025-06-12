@@ -1,0 +1,112 @@
+require("dotenv").config();
+const { ethers } = require("ethers");
+const fs = require("fs").promises;
+const path = require("path");
+const { execSync } = require("child_process");
+
+module.exports = async (req, res) => {
+  console.log("API /claim called with body:", req.body);
+
+  // Cek environment variables
+  if (!process.env.PRIVATE_KEY) {
+    console.error("Missing PRIVATE_KEY");
+    return res.status(500).json({ error: "ERROR: Missing PRIVATE_KEY" });
+  }
+
+  // Path untuk claims.json
+  const claimsFile = path.join(process.cwd(), "claims.json");
+
+  // Fungsi untuk baca claims
+  async function readClaims() {
+    try {
+      const data = await fs.readFile(claimsFile, "utf8");
+      return JSON.parse(data);
+    } catch (error) {
+      if (error.code === "ENOENT") {
+        return {};
+      }
+      throw error;
+    }
+  }
+
+  // Fungsi untuk tulis claims dan push ke GitHub
+  async function writeClaims(claims) {
+    await fs.writeFile(claimsFile, JSON.stringify(claims, null, 2));
+    if (process.env.GITHUB_TOKEN) {
+      try {
+        // Setup git
+        execSync("git config --global user.email 'bot@github.com'");
+        execSync("git config --global user.name 'Claims Bot'");
+        // Commit dan push
+        execSync("git add claims.json");
+        execSync(`git commit -m "Update claims.json for wallet ${req.body.wallet}"`);
+        execSync(`git push https://x-access-token:${process.env.GITHUB_TOKEN}@github.com/${process.env.GITHUB_REPOSITORY}.git`);
+        console.log("Pushed claims.json to GitHub");
+      } catch (error) {
+        console.error("Failed to push claims.json:", error.message);
+      }
+    }
+  }
+
+  try {
+    // Cek koneksi RPC
+    const provider = new ethers.JsonRpcProvider("http://20.211.3.101:8545");
+    await provider.getBlockNumber().catch((err) => {
+      throw new Error(`RPC connection failed: ${err.message}`);
+    });
+    const wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
+
+    const { wallet: targetWallet } = req.body;
+
+    // Validasi input
+    if (!targetWallet) {
+      console.error("Missing wallet");
+      return res.status(400).json({ error: "ERROR: Missing wallet" });
+    }
+
+    // Validasi alamat wallet
+    if (!ethers.isAddress(targetWallet)) {
+      console.error("Invalid wallet address:", targetWallet);
+      return res.status(400).json({ error: "ERROR: Invalid wallet address" });
+    }
+
+    // Cek batas klaim 24 jam
+    console.log("Checking claim for wallet:", targetWallet);
+    const claims = await readClaims();
+    const lastClaim = claims[targetWallet];
+    const now = Date.now();
+    const oneDayInMs = 24 * 60 * 60 * 1000;
+
+    if (lastClaim && now - lastClaim < oneDayInMs) {
+      const timeLeftMs = oneDayInMs - (now - lastClaim);
+      const hoursLeft = Math.floor(timeLeftMs / (60 * 60 * 1000));
+      const minutesLeft = Math.floor((timeLeftMs % (60 * 60 * 1000)) / (60 * 1000));
+      console.log(`Wallet ${targetWallet} already claimed, time left: ${hoursLeft}h ${minutesLeft}m`);
+      return res.status(429).json({
+        error: `ERROR: Wallet already claimed. Try again in ${hoursLeft} hours ${minutesLeft} minutes`,
+      });
+    }
+
+    // Kirim 1 CHIPS
+    console.log("Sending transaction to:", targetWallet);
+    const tx = await wallet.sendTransaction({
+      to: targetWallet,
+      value: ethers.parseEther("1"),
+    });
+    console.log("Transaction sent, hash:", tx.hash);
+    const receipt = await tx.wait();
+    console.log("Transaction confirmed, receipt:", receipt.hash);
+
+    // Simpan timestamp klaim
+    claims[targetWallet] = now;
+    await writeClaims(claims);
+    console.log("Claim saved for wallet:", targetWallet);
+
+    res.json({
+      txHash: receipt.hash,
+    });
+  } catch (error) {
+    console.error("Error claiming faucet:", error.message);
+    res.status(500).json({ error: `ERROR: Claim failed - ${error.message}` });
+  }
+};
