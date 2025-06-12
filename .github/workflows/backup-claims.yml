@@ -9,13 +9,13 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Commit claims.json
-        run: |
-          git config --global user.email "bot@github.com"
-          git config --global user.name "Claims Bot"
-          git add claims.json
-          git commit -m "Backup claims.json" || echo "No changes to commit"
-          git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - uses: actions/checkout@v4
+    - name: Commit claims
+      run: |
+        git config --global user.email "bot@example.com"
+        git config --global user.name "Claims Bot"
+        git add claims.json
+        git commit -m "Backup claims.json" || true
+        git push
+      env:
+        GITHUB_TOKEN: ${{ secrets.CLAIM_TOKEN }}
