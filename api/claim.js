@@ -137,11 +137,11 @@ module.exports = async (req, res) => {
       });
     }
 
-    // Send 1 CHIPS
+    // Send 10 CHIPS
     console.log("Sending transaction to:", normalizedWallet);
     const tx = await wallet.sendTransaction({
       to: normalizedWallet,
-      value: ethers.parseEther("1"),
+      value: ethers.parseEther("10"),
     });
     console.log("Transaction sent, hash:", tx.hash);
     const receipt = await tx.wait();
