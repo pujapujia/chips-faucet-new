@@ -13,8 +13,8 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: "Missing PRIVATE_KEY" });
   }
 
-  // Path untuk claims.json
-  const claimsFile = path.join(process.cwd(), "claims.json");
+  // Path untuk claims.json di /tmp
+  const claimsFile = path.join("/tmp", "claims.json");
 
   // Fungsi untuk baca claims
   async function readClaims() {
@@ -31,20 +31,27 @@ module.exports = async (req, res) => {
 
   // Fungsi untuk tulis claims dan push ke GitHub
   async function writeClaims(claims) {
-    await fs.writeFile(claimsFile, JSON.stringify(claims, null, 2));
-    if (process.env.CLAIM_TOKEN) {
-      try {
-        // Setup git
-        execSync("git config --global user.email 'bot@github.com'");
-        execSync("git config --global user.name 'Claims Bot'");
-        // Commit dan push
-        execSync("git add claims.json");
-        execSync(`git commit -m "Update claims.json for wallet ${req.body.wallet}"`);
-        execSync(`git push https://x-access-token:${process.env.CLAIM_TOKEN}@github.com/${process.env.GITHUB_REPOSITORY}.git`);
-        console.log("Pushed claims.json to GitHub");
-      } catch (error) {
-        console.error("Failed to push claims.json:", error.message);
+    try {
+      await fs.writeFile(claimsFile, JSON.stringify(claims, null, 2));
+      if (process.env.CLAIM_TOKEN) {
+        try {
+          // Setup git
+          execSync("git config --global user.email 'bot@github.com'");
+          execSync("git config --global user.name 'Claims Bot'");
+          // Copy claims.json ke root untuk commit
+          await fs.copyFile(claimsFile, path.join(process.cwd(), "claims.json"));
+          // Commit dan push
+          execSync("git add claims.json");
+          execSync(`git commit -m "Update claims.json for wallet ${req.body.wallet}"`);
+          execSync(`git push https://x-access-token:${process.env.CLAIM_TOKEN}@github.com/${process.env.GITHUB_REPOSITORY}.git`);
+          console.log("Pushed claims.json to GitHub");
+        } catch (error) {
+          console.error("Failed to push claims.json:", error.message);
+        }
       }
+    } catch (error) {
+      console.error("Failed to write claims:", error.message);
+      throw error;
     }
   }
 
