@@ -4,7 +4,7 @@
   "description": "Faucet claimer for CHIPS testnet tokens",
   "main": "api/claim.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1
+    "test": "echo No test specified"
   },
   "dependencies": {
     "ethers": "6.13.2",
