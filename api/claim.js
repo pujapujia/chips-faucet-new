@@ -13,38 +13,23 @@ module.exports = async (req, res) => {
     return res.status(500).json({ error: "Konfigurasi server salah" });
   }
 
-  // Path untuk claims.json
-  const tmpClaimsFile = path.join("/tmp", "claims.json");
-  const rootClaimsFile = path.join(process.cwd(), "claims.json");
+  // Path untuk claims.json (cuma di root, nggak pake /tmp)
+  const claimsFile = path.join(process.cwd(), "claims.json");
 
   // Fungsi untuk baca claims
   async function readClaims() {
     try {
-      let data;
-      try {
-        // Coba baca dari /tmp
-        data = await fs.readFile(tmpClaimsFile, "utf8");
-        console.log("Baca /tmp/claims.json:", data);
-      } catch (error) {
-        if (error.code === "ENOENT") {
-          console.log("/tmp/claims.json nggak ada, coba root claims.json");
-          try {
-            // Coba baca dari root
-            data = await fs.readFile(rootClaimsFile, "utf8");
-            console.log("Baca root claims.json:", data);
-            await fs.writeFile(tmpClaimsFile, data); // Sinkronkan ke /tmp
-          } catch (rootError) {
-            console.log("Nggak ada root claims.json, inisialisasi kosong");
-            data = "{}";
-            await fs.writeFile(tmpClaimsFile, data);
-          }
-        } else {
-          throw error;
-        }
-      }
+      const data = await fs.readFile(claimsFile, "utf8");
+      console.log("Baca claims.json:", data);
       return JSON.parse(data);
     } catch (error) {
-      console.error("Gagal baca claims:", error.message);
+      if (error.code === "ENOENT") {
+        console.log("claims.json nggak ada, inisialisasi kosong");
+        const emptyClaims = {};
+        await fs.writeFile(claimsFile, JSON.stringify(emptyClaims, null, 2));
+        return emptyClaims;
+      }
+      console.error("Gagal baca claims.json:", error.message);
       throw error;
     }
   }
@@ -52,26 +37,33 @@ module.exports = async (req, res) => {
   // Fungsi untuk tulis claims dan push ke GitHub
   async function writeClaims(claims) {
     try {
+      // Backup claims sebelum ditulis
+      let backupClaims;
+      try {
+        backupClaims = await fs.readFile(claimsFile, "utf8");
+      } catch (error) {
+        backupClaims = "{}"; // Kalau file nggak ada
+      }
+
+      // Tulis claims baru
       const data = JSON.stringify(claims, null, 2);
-      // Tulis ke /tmp
-      await fs.writeFile(tmpClaimsFile, data);
-      console.log("Tulis /tmp/claims.json:", data);
+      await fs.writeFile(claimsFile, data);
+      console.log("Tulis claims.json:", data);
 
       // Coba push ke GitHub
       try {
-        // Setup git
         execSync("git config --global user.email 'bot@github.com'");
         execSync("git config --global user.name 'Claims Bot'");
-        // Copy ke root untuk commit
-        await fs.copyFile(tmpClaimsFile, rootClaimsFile);
-        // Commit dan push
         execSync("git add claims.json");
         execSync(`git commit -m "Update claims.json untuk wallet ${req.body.wallet}" || true`);
         execSync(`git push https://x-access-token:${process.env.CLAIM_TOKEN}@github.com/${process.env.GITHUB_REPOSITORY}.git`);
         console.log("Berhasil push claims.json ke GitHub");
       } catch (gitError) {
         console.error("Gagal push claims.json ke GitHub:", gitError.message);
-        // Nggak throw error, biar transaksi tetep sukses
+        // Rollback ke backup kalau gagal push
+        await fs.writeFile(claimsFile, backupClaims);
+        console.log("Rollback claims.json ke data sebelumnya");
+        throw new Error("Gagal menyimpan klaim ke GitHub");
       }
     } catch (error) {
       console.error("Gagal tulis claims:", error.message);
@@ -95,14 +87,14 @@ module.exports = async (req, res) => {
       return res.status(400).json({ error: "Alamat wallet wajib diisi" });
     }
 
-    // Validasi alamat wallet
-    if (!ethers.isAddress(targetWallet)) {
+    // Normalisasi alamat wallet
+    let normalizedWallet;
+    try {
+      normalizedWallet = ethers.getAddress(targetWallet);
+    } catch (error) {
       console.error("Alamat wallet salah:", targetWallet);
       return res.status(400).json({ error: "Alamat wallet nggak valid" });
     }
-
-    // Normalisasi alamat wallet (biar case-insensitive)
-    const normalizedWallet = ethers.getAddress(targetWallet);
 
     // Cek batas klaim 24 jam
     console.log("Cek klaim untuk:", normalizedWallet);
