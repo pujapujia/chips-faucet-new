@@ -20,7 +20,7 @@ module.exports = async (req, res) => {
       const response = await fetch(GITHUB_API_URL, {
         method: "GET",
         headers: {
-          Authorization: `token ${GITHUB_TOKEN}`, // Use 'token' for classic PAT
+          Authorization: `token ${GITHUB_TOKEN}`,
           Accept: "application/vnd.github+json",
           "User-Agent": "chips-faucet-claimer",
           "X-GitHub-Api-Version": "2022-11-28",
@@ -63,7 +63,8 @@ module.exports = async (req, res) => {
         body: JSON.stringify(body),
       });
       if (!response.ok) {
-        throw new Error(`Failed to write claims.json to GitHub: ${response.status} ${response.statusText}`);
+        const errorData = await response.json();
+        throw new Error(`Failed to write claims.json to GitHub: ${response.status} ${response.statusText} - ${errorData.message}`);
       }
       console.log("Successfully wrote claims.json to GitHub");
     } catch (error) {
