@@ -31,7 +31,8 @@ module.exports = async (req, res) => {
         return { content: {}, sha: null };
       }
       if (!response.ok) {
-        throw new Error(`Failed to read claims.json from GitHub: ${response.status} ${response.statusText}`);
+        const errorData = await response.json();
+        throw new Error(`Failed to read claims.json from GitHub: ${response.status} ${response.statusText} - ${errorData.message}`);
       }
       const data = await response.json();
       const content = JSON.parse(Buffer.from(data.content, "base64").toString("utf8"));
@@ -71,6 +72,27 @@ module.exports = async (req, res) => {
       console.error("Error writing claims:", error.message);
       throw error;
     }
+  }
+
+  // Test GitHub token validity
+  try {
+    const testResponse = await fetch(`https://api.github.com/repos/${process.env.GITHUB_REPOSITORY}`, {
+      headers: {
+        Authorization: `token ${GITHUB_TOKEN}`,
+        Accept: "application/vnd.github+json",
+        "User-Agent": "chips-faucet-claimer",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+    });
+    if (!testResponse.ok) {
+      const errorData = await testResponse.json();
+      console.error("GitHub token test failed:", errorData.message);
+      return res.status(500).json({ error: `Invalid GitHub token: ${errorData.message}` });
+    }
+    console.log("GitHub token valid, proceeding...");
+  } catch (error) {
+    console.error("Error testing GitHub token:", error.message);
+    return res.status(500).json({ error: `Failed to validate GitHub token: ${error.message}` });
   }
 
   try {
