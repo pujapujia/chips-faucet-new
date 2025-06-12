@@ -107,19 +107,19 @@
       <button class="copy-button" onclick="copyAddress()">COPY</button>
     </div>
   </div>
-  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.min.js" integrity="sha256-4ZNs5AG2U7uO6dd0tSG91C2iQkO8NVJ6XvPwF0GDatY=" crossorigin="anonymous"></script>
   <script>
     async function claimFaucet() {
       const walletInput = document.getElementById("wallet").value.trim();
       const resultDiv = document.getElementById("result");
 
-      // Validasi dasar (pastikan input nggak kosong)
+      // Validasi dasar
       if (!walletInput) {
         resultDiv.innerHTML = "ERROR: Alamat wallet wajib diisi";
         return;
       }
 
-      // Coba normalisasi wallet pake ethers.js
+      // Coba normalisasi wallet
       let wallet = walletInput;
       if (typeof ethers !== "undefined" && ethers.utils) {
         try {
